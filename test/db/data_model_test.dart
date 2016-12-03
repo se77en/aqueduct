@@ -419,11 +419,6 @@ void main() {
           false);
     });
   });
-
-  group("Package finding", () {
-    // Declared in same library file
-    // Declared in file exported by
-  });
 }
 
 class User extends ManagedObject<_User> implements _User {
