@@ -6,11 +6,11 @@ import '../../helpers.dart';
 /*
   The test data is like so:
 
-     A                B                C         D
-     |                |                |
-    C1               C2                C3
-   / | \              |
-  T1 V1 V2            V3
+     A                B                C         D  | Parent
+     |                |                |            |
+    C1               C2                C3           | Child
+   / | \              |                             |
+  T1 V1 V2            V3                            | Toy/Vaccinations
  */
 
 void main() {
@@ -339,6 +339,119 @@ void main() {
           }
         }
       }
+    });
+  });
+
+  group("Outer table filtering", () {
+/*
+  The test data is like so:
+
+     A                B                C         D  | Parent
+     |                |                |            |
+    C1               C2                C3           | Child
+   / | \              |                             |
+  T1 V1 V2            V3                            | Toy/Vaccinations
+ */
+
+    ManagedContext context = null;
+
+    setUpAll(() async {
+      context = await contextWithModels([Child, Parent, Toy, Vaccine]);
+      await populate();
+    });
+
+    tearDownAll(() {
+      context?.persistentStore?.close();
+    });
+
+    test("One-level deep join, filter left table by results of right table", () async {
+      var q = new Query<Parent>()
+        ..matchOn.child.name = whereEqualTo("C2");
+
+      var results = await q.fetch();
+      expect(results.length, 1);
+
+      var parent = results.first;
+      expect(parent.name, "B");
+      expect(parent.child, isNull);
+
+      q = new Query<Parent>()
+        ..matchOn.child.includeInResultSet = true
+        ..matchOn.child.name = whereEqualTo("C1");
+
+      results = await q.fetch();
+      expect(results.length, 1);
+
+      parent = results.first;
+      expect(parent.name, "A");
+
+      var child = parent.child;
+      expect(child.name, "C1");
+      expect(child.vaccinations, isNull);
+      expect(child.toy, isNull);
+    });
+
+    test("Filter with matcher in the relationship property itself", () async {
+      var q = new Query<Parent>()
+        ..matchOn.child = whereNotNull;
+
+      var results = await q.fetch();
+      expect(results.length, 3);
+
+      expect(results[0].name, "A");
+      expect(results[1].name, "B");
+      expect(results[2].name, "C");
+      for (var r in results) {
+        expect(r.child, isNull);
+      }
+
+      q = new Query<Parent>()
+        ..matchOn.child.includeInResultSet = true
+        ..matchOn.child = whereNotNull;
+
+      results = await q.fetch();
+      expect(results.length, 3);
+
+      expect(results[0].name, "A");
+      expect(results[1].name, "B");
+      expect(results[2].name, "C");
+      expect(results[0].child.name, "C1");
+      expect(results[1].child.name, "C2");
+      expect(results[2].child.name, "C3");
+    });
+
+    test("Multi-level join, matcher 3rd level property for top level property", () async {
+      var q = new Query<Parent>()
+        ..matchOn.child.toy.name = whereEqualTo("T1");
+
+      var results = await q.fetch();
+      expect(results.length, 1);
+      expect(results.first.name, "A");
+
+      q = new Query<Parent>()
+        ..matchOn.child.includeInResultSet = true
+        ..matchOn.child.toy.name = whereEqualTo("T1");
+
+      results = await q.fetch();
+      expect(results.length, 1);
+      expect(results.first.name, "A");
+      expect(results.first.child.name, "C1");
+
+      q = new Query<Parent>()
+        ..matchOn.child.includeInResultSet = true
+        ..matchOn.child.matchOn.toy.includeInResultSet = true
+        ..matchOn.child.toy.name = whereEqualTo("T1");
+
+      results = await q.fetch();
+      expect(results.length, 1);
+      expect(results.first.name, "A");
+      expect(results.first.child.name, "C1");
+    });
+
+    test("Multi-level join, matcher 3rd level property for 2nd level property", () async {
+      var q = new Query<Parent>()
+        ..matchOn.child
+        ..matchOn.child = whereNotNull;
     });
   });
 
